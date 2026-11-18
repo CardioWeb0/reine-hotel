@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Gestion · Reine Hotel</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui,sans-serif;background:#f2efe8;color:#222;padding:14px;max-width:640px;margin:auto}
+.box{background:#fff;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 4px 16px rgba(0,0,0,.07)}
+input,textarea{width:100%;padding:12px;margin:6px 0;border:1px solid #ddd;border-radius:10px;font:inherit}
+input[type=checkbox]{width:auto;margin-right:6px}
+.b,.b2{border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer;margin:6px 6px 0 0}.b{background:#c9a227;color:#111}.b2{background:#e6e1d3}
+.top{display:flex;justify-content:space-between;align-items:center}
+#tabs{display:flex;gap:6px;overflow-x:auto;margin-top:10px}#tabs button{flex:1;padding:10px;border:0;border-radius:10px;background:#e6e1d3;font-weight:700}#tabs .on{background:#0f1b2d;color:#fff}
+.it{display:flex;gap:10px;align-items:center;background:#fff;border-radius:12px;padding:10px;margin:8px 0}.it>div:nth-child(2){flex:1;font-size:14px}
+.th{width:56px;height:56px;border-radius:10px;background:#ddd center/cover}
+#pv{width:100%;max-height:180px;object-fit:cover;border-radius:10px;margin:6px 0}
+pre{white-space:pre-wrap;font:inherit;margin:8px 0}#err,#msg{color:#b3261e;margin-top:8px;font-size:14px}
+.ac{display:flex;flex-direction:column;gap:6px}.box .b2,.ac .b2{padding:9px 14px;font-size:13px}.dg{background:#f8d7d3!important;color:#8a1c14}#main{margin-top:12px}h4{margin:12px 0 4px}
+.sp{display:inline-block;width:14px;height:14px;border:2px solid #111;border-top-color:transparent;border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px}@keyframes r{to{transform:rotate(360deg)}}.b:disabled{opacity:.7}
+</style></head><body>
+<div id="login" class="box"><h2>🔐 Espace propriétaire</h2><input id="em" type="email" placeholder="E-mail"><input id="pw" type="password" placeholder="Mot de passe"><button class="b" id="lb" onclick="login()">Connexion</button><p id="err"></p><button class="b2" onclick="forgot()">Mot de passe oublié</button></div>
+<div id="app" hidden><div class="top"><b>Gestion Reine Hotel</b><button class="b2" onclick="auth.signOut()">Déconnexion</button></div><div id="tabs"></div><div id="main"></div></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const CFG={apiKey:"AIzaSyCeTVHvbNSc7wrVfesS_3lek5WwNg8B1Z8",authDomain:"reine-hotel.firebaseapp.com",projectId:"reine-hotel",appId:"1:934473604172:web:1a1c772fb6d08a8d8668e9"}; // ← même configuration que index.html
+const $=s=>document.querySelector(s),T={demandes:"Demandes",chambre:"Chambres",salle:"Salles",plat:"Plats",infos:"Infos",reine:"Reine 👑",compte:"Compte"};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let tab="chambre",ITEMS=[],DEM=[],FAQ=[],fe=null,S={},edit=null,photo=null,on=0,auth,db;
+if(!CFG.projectId)$("#err").textContent="Firebase n'est pas encore configuré dans ce fichier.";
+else if(typeof firebase=="undefined")$("#err").textContent="Impossible de charger Firebase : vérifie ta connexion internet.";
+else{firebase.initializeApp(CFG);auth=firebase.auth();db=firebase.firestore();
+ auth.onAuthStateChanged(u=>{$("#login").hidden=!!u;$("#app").hidden=!u;if(u)start()})}
+function busy(on){const b=$("#lb");b.disabled=!!on;b.innerHTML=on?'<span class="sp"></span> Connexion en cours...':"Connexion"}
+function login(){if(!auth)return;const m=$("#em").value.trim(),p=$("#pw").value,e0=$("#err");
+ if(!m||!p){e0.style.color="";e0.textContent="Saisis ton e-mail et ton mot de passe.";return}
+ e0.style.color="#555";e0.textContent="Vérification en cours, patiente...";busy(1);
+ const slow=setTimeout(()=>e0.textContent="Le réseau est lent, patiente encore un peu...",8000);
+ auth.signInWithEmailAndPassword(m,p).then(()=>{clearTimeout(slow);busy(0);e0.textContent=""}).catch(e=>{clearTimeout(slow);busy(0);e0.style.color="";
+  const bad=["auth/invalid-credential","auth/wrong-password","auth/user-not-found","auth/invalid-email"].includes(e.code);
+  e0.textContent=bad?"E-mail ou mot de passe incorrect":"Erreur : "+e.code+" — "+e.message})}
+$("#pw").addEventListener("keydown",e=>{if(e.key=="Enter")login()});
+async function start(){if(on)return;on=1;S=(await db.doc("settings/hotel").get()).data()||{};
+ db.collection("items").orderBy("ts").onSnapshot(q=>{ITEMS=q.docs.map(d=>({id:d.id,...d.data()}));list()});
+ db.collection("demandes").orderBy("ts","desc").onSnapshot(q=>{DEM=q.docs.map(d=>({id:d.id,...d.data()}));tabsUI();list()});
+ db.collection("faq").orderBy("ts").onSnapshot(q=>{FAQ=q.docs.map(d=>({id:d.id,...d.data()}));list()});show()}
+function tabsUI(){const nb=DEM.filter(d=>d.statut=="nouvelle").length;$("#tabs").innerHTML=Object.entries(T).map(([k,v])=>`<button class="${k==tab?"on":""}" onclick="tab='${k}';edit=null;fe=null;photo=null;show()">${v}${k=="demandes"&&nb?" ("+nb+")":""}</button>`).join("")}
+function show(){tabsUI();$("#main").innerHTML=tab=="infos"?formInfos():tab=="demandes"?'<div id="list"></div>':tab=="reine"?formFaq():tab=="compte"?formCompte():formItem();list()}
+const st=(id,s)=>db.doc("demandes/"+id).update({statut:s}),dd=id=>confirm("Supprimer cette demande ?")&&db.doc("demandes/"+id).delete();
+function listDem(){const el=$("#list");if(!el)return;el.innerHTML=DEM.map(d=>{const n=String(d.tel||"").replace(/\D/g,""),w="https://wa.me/"+(n.startsWith("229")?n:"229"+n)+"?text="+encodeURIComponent("Bonjour "+d.nom+", merci pour votre demande à Reine Hotel.");
+ return `<div class="box"><b>${{reservation:"🛏️ Réservation",commande:"🍽️ Commande",devis:"🎉 Devis"}[d.kind]||esc(d.kind)}</b> · ${d.statut=="nouvelle"?"🔴 nouvelle":d.statut=="confirmee"?"🟢 confirmée":"⚫ refusée"}<br>${esc(d.nom)} · ${esc(d.tel)}${d.total?"<br>Total : "+Number(d.total).toLocaleString("fr-FR")+" FCFA":""}<pre>${esc(d.details)}</pre><small>${new Date(d.ts).toLocaleString("fr-FR")}</small><br><a class="b" style="display:inline-block;text-decoration:none" href="${w}" target="_blank">WhatsApp</a><button class="b2" onclick="st('${d.id}','confirmee')">Confirmer</button><button class="b2" onclick="st('${d.id}','refusee')">Refuser</button><button class="b2 dg" onclick="dd('${d.id}')">Supprimer</button></div>`}).join("")||"<p>Aucune demande pour l'instant.</p>"}
+function formItem(){const e=edit||{};return `<div class="box"><h3>${edit?"Modifier":"Ajouter"}</h3><input id="nom" placeholder="Nom" value="${esc(e.nom||"")}"><input id="prix" type="number" placeholder="Prix en FCFA" value="${e.prix||""}"><textarea id="desc" placeholder="Description (clim, WiFi, capacité...)">${esc(e.desc||"")}</textarea><p>📷 Photo</p><input type="file" accept="image/*" onchange="pick(this)"><img id="pv" src="${e.photo||""}" ${e.photo?"":"hidden"}><label><input type="checkbox" id="dispo" ${e.dispo===false?"":"checked"}>Disponible</label><br><button class="b" onclick="save()">Enregistrer</button>${edit?'<button class="b2" onclick="edit=null;photo=null;show()">Annuler</button>':""}<p id="msg"></p></div><div id="list"></div>`}
+function formInfos(){return `<div class="box"><h3>Infos de l'hôtel</h3><input id="whatsapp" placeholder="WhatsApp avec indicatif, sans + (ex : 229XXXXXXXXXX)" value="${esc(S.whatsapp||"")}"><p>📞 Numéros de téléphone</p><div id="nums">${numsHtml()}</div><input id="nn" type="tel" placeholder="Nouveau numéro (ex : +229 01 XX XX XX XX)"><button class="b2" onclick="addNum()">Ajouter ce numéro</button><input id="adresse" placeholder="Adresse" value="${esc(S.adresse||"")}"><input id="horaires" placeholder="Horaires" value="${esc(S.horaires||"")}"><input id="slogan" placeholder="Phrase d'accueil" value="${esc(S.slogan||"")}"><p>📷 Photo de la page d'accueil</p><input type="file" accept="image/*" onchange="pick(this)"><img id="pv" src="${S.hero||""}" ${S.hero?"":"hidden"}><br><button class="b" onclick="saveInfos()">Enregistrer</button><p id="msg"></p></div>`}
+function list(){if(tab=="demandes")return listDem();if(tab=="reine")return listFaq();const el=$("#list");if(!el)return;const l=ITEMS.filter(x=>x.type==tab);
+ el.innerHTML=l.map(x=>`<div class="it"><div class="th" style="background-image:url(${x.photo||""})"></div><div><b>${esc(x.nom)}</b><br>${Number(x.prix).toLocaleString("fr-FR")} FCFA · ❤️ ${x.likes||0}${x.dispo===false?" · ⛔ indisponible":""}</div><div class="ac"><button class="b2" onclick="ed('${x.id}')">Modifier</button><button class="b2 dg" onclick="del('${x.id}')">Supprimer</button></div></div>`).join("")||"<p>Rien pour l'instant.</p>"}
+function formFaq(){const e=fe||{};return `<div class="box"><h3>👑 Connaissances de Reine</h3><p style="font-size:13px;margin:6px 0">Reine connaît déjà tes chambres, salles, plats, prix, disponibilités, adresse et horaires : dès que tu les modifies, elle est à jour. Ici, apprends-lui le reste (WiFi, parking, petit-déjeuner, annulation, paiement...).</p><input id="fm" placeholder="Mots-clés séparés par des virgules (ex : wifi, internet)" value="${esc(e.mots||"")}"><textarea id="fr" placeholder="Réponse de Reine">${esc(e.rep||"")}</textarea><button class="b" onclick="saveFaq()">Enregistrer</button>${fe?'<button class="b2" onclick="fe=null;show()">Annuler</button>':""}<p id="msg"></p></div><div id="list"></div>`}
+function listFaq(){const el=$("#list");if(!el)return;el.innerHTML=FAQ.map(f=>`<div class="it"><div style="flex:1;font-size:14px"><b>${esc(f.mots)}</b><br>${esc(f.rep)}</div><div class="ac"><button class="b2" onclick="edF('${f.id}')">Modifier</button><button class="b2 dg" onclick="delF('${f.id}')">Supprimer</button></div></div>`).join("")||"<p>Aucune réponse apprise pour l'instant.</p>"}
+async function saveFaq(){const mots=$("#fm").value.trim(),rep=$("#fr").value.trim();if(!mots||!rep)return msg("Mots-clés et réponse obligatoires");
+ try{if(fe)await db.doc("faq/"+fe.id).update({mots,rep});else await db.collection("faq").add({mots,rep,ts:Date.now()});fe=null;show();msg("✅ Enregistré")}catch(e){msg("Erreur : "+e.message)}}
+const edF=id=>{fe=FAQ.find(x=>x.id==id);show();scrollTo(0,0)},delF=id=>confirm("Supprimer cette réponse ?")&&db.doc("faq/"+id).delete();
+const NUMS=()=>S.numeros||(S.tel?[S.tel]:[]);
+const numsHtml=()=>NUMS().map((n,i)=>`<div class="it"><div style="flex:1">${esc(n)}</div><button class="b2 dg" onclick="delNum(${i})">Supprimer</button></div>`).join("")||'<p style="font-size:13px;color:#777">Aucun numéro enregistré.</p>';
+async function setNums(l){try{await db.doc("settings/hotel").set({numeros:l},{merge:true});S.numeros=l;$("#nums").innerHTML=numsHtml();$("#nn").value="";msg("✅ Numéros mis à jour")}catch(e){msg("Erreur : "+e.message)}}
+const addNum=()=>{const n=$("#nn").value.trim();if(n)setNums([...NUMS(),n])},delNum=i=>confirm("Supprimer ce numéro ?")&&setNums(NUMS().filter((_,k)=>k!=i));
+function formCompte(){const u=auth.currentUser;return `<div class="box"><h3>🔐 Mon compte</h3><p style="font-size:14px;margin-top:6px">Connecté avec : <b>${esc(u.email)}</b></p>
+<h4>Changer le mot de passe</h4><input id="p0" type="password" placeholder="Mot de passe actuel"><input id="p1" type="password" placeholder="Nouveau mot de passe (8 caractères minimum)"><input id="p2" type="password" placeholder="Confirmer le nouveau mot de passe"><button class="b" onclick="chPw()">Changer le mot de passe</button>
+<h4>Changer l'e-mail</h4><input id="e1" type="email" placeholder="Nouvel e-mail"><input id="e0" type="password" placeholder="Mot de passe actuel"><button class="b" onclick="chEm()">Changer l'e-mail</button><p id="msg"></p>
+<p style="font-size:12px;color:#777;margin-top:14px">Identifiant du compte (UID) :<br><code style="word-break:break-all;user-select:all">${u.uid}</code></p></div>`}
+const autherr=e=>["auth/invalid-credential","auth/wrong-password"].includes(e.code)?"Mot de passe actuel incorrect":e.code=="auth/email-already-in-use"?"Cet e-mail est déjà utilisé":e.code=="auth/weak-password"?"Mot de passe trop faible":"Erreur : "+e.code;
+async function reauth(pw){const u=auth.currentUser;await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,pw));return u}
+async function chPw(){const b=$("#p1").value;if(b.length<8)return msg("Nouveau mot de passe : 8 caractères minimum");if(b!=$("#p2").value)return msg("Les deux mots de passe ne sont pas identiques");
+ try{const u=await reauth($("#p0").value);await u.updatePassword(b);msg("✅ Mot de passe changé");["p0","p1","p2"].forEach(i=>$("#"+i).value="")}catch(e){msg(autherr(e))}}
+async function chEm(){const n=$("#e1").value.trim();if(!n)return msg("Saisis le nouvel e-mail");
+ try{const u=await reauth($("#e0").value);await u.verifyBeforeUpdateEmail(n);msg("✅ Un e-mail de confirmation vient d'être envoyé à "+n+". Ouvre-le et touche le lien : l'e-mail changera à ce moment-là.")}catch(e){msg(autherr(e))}}
+function forgot(){const m=$("#em").value.trim();if(!m)return $("#err").textContent="Saisis ton e-mail ci-dessus d'abord.";
+ auth.sendPasswordResetEmail(m).then(()=>$("#err").textContent="✅ E-mail de réinitialisation envoyé (vérifie aussi les spams).").catch(e=>$("#err").textContent="Erreur : "+e.code)}
+function comp(f,max=900){return new Promise(r=>{const im=new Image();im.onload=()=>{const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=im.width*k;c.height=im.height*k;c.getContext("2d").drawImage(im,0,0,c.width,c.height);let q=.75,d;do{d=c.toDataURL("image/jpeg",q);q-=.1}while(d.length>600000&&q>.3);r(d)};im.src=URL.createObjectURL(f)})}
+async function pick(i){if(!i.files[0])return;photo=await comp(i.files[0],tab=="infos"?1400:900);const p=$("#pv");p.src=photo;p.hidden=false}
+const msg=t=>{const m=$("#msg");if(m)m.textContent=t};
+async function save(){const nom=$("#nom").value.trim(),prix=+$("#prix").value;if(!nom||!prix)return msg("Nom et prix obligatoires");
+ const d={type:tab,nom,prix,desc:$("#desc").value.trim(),dispo:$("#dispo").checked,photo:photo||(edit&&edit.photo)||""};
+ try{msg("⏳ Enregistrement en cours...");if(edit)await db.doc("items/"+edit.id).update(d);else await db.collection("items").add({...d,likes:0,ts:Date.now()});edit=null;photo=null;show();msg("✅ Enregistré")}catch(e){msg("Erreur : "+e.message)}}
+async function saveInfos(){const d={};["whatsapp","adresse","horaires","slogan"].forEach(k=>d[k]=$("#"+k).value.trim());if(photo)d.hero=photo;
+ try{msg("⏳ Enregistrement en cours...");await db.doc("settings/hotel").set(d,{merge:true});S={...S,...d};photo=null;msg("✅ Enregistré")}catch(e){msg("Erreur : "+e.message)}}
+function ed(id){edit=ITEMS.find(x=>x.id==id);photo=null;show();scrollTo(0,0)}
+function del(id){if(confirm("Supprimer définitivement ?"))db.doc("items/"+id).delete()}
+</script></body></html>
