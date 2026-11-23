@@ -46,6 +46,15 @@ dialog .btn{width:100%;margin-top:16px}.x{background:none;border:0;color:#777;pa
 .m{max-width:85%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4}.ai{background:#f3efe2;align-self:flex-start}.me{background:#c9a227;align-self:flex-end}
 .ch{display:block;margin-top:8px;background:#fff;border:1px solid #c9a227;border-radius:20px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer}
 #rf{display:flex;gap:6px;padding:10px;border-top:1px solid #eee}#rf input{flex:1;padding:11px;border:1px solid #ddd;border-radius:20px;font:inherit}#rf .btn{padding:0 16px;margin:0;width:auto}
+html{-webkit-tap-highlight-color:rgba(201,162,39,.25)}button{touch-action:manipulation}
+.btn,.like,.ch{position:relative;overflow:hidden;transition:transform .15s ease,box-shadow .2s ease,filter .2s ease,background .2s}
+.btn:active,.like:active,.ch:active,#wa:active,#rb:active{transform:scale(.93)!important;filter:brightness(.95)}
+.ch:active{background:#f0d27a}
+@media(hover:hover){.btn:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(201,162,39,.45);filter:brightness(1.06)}.like:hover,.ch:hover{transform:translateY(-1px)}}
+.rp{position:absolute;border-radius:50%;background:rgba(255,255,255,.6);transform:scale(0);animation:rp .6s ease-out;pointer-events:none}
+@keyframes rp{to{transform:scale(3);opacity:0}}
+@keyframes pop{40%{transform:scale(1.35)}100%{transform:scale(1)}}.like.pop{animation:pop .4s ease}
+@media(prefers-reduced-motion:reduce){.rp{display:none}.like.pop{animation:none}}
 </style></head><body>
 <header><a class="logo" href="#top">REINE HOTEL</a>
 <nav id="nav"><a href="#chambres">Chambres</a><a href="#salles">Salles</a><a href="#restaurant">Restaurant</a><a href="#contact">Contact</a></nav>
@@ -142,5 +151,10 @@ $("#rc").onclick=e=>{const b=e.target.closest("[data-a]");if(!b)return;const a=b
  else if(a=="map")window.open("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(S.adresse),"_blank");
  else if(a.startsWith("it:")){const it=ITEMS.find(x=>x.id==a.slice(3));if(!it)return;
   if(it.type=="plat"){const c=CART[it.id]||(CART[it.id]={nom:it.nom,prix:it.prix,q:0});c.q++;cartUI();toast("Ajouté : "+it.nom)}else{$("#rc").hidden=true;openForm(it.type,it.nom)}}};
+document.addEventListener("pointerdown",e=>{const b=e.target.closest(".btn,.like,.ch");if(!b||b.disabled)return;
+ const r=b.getBoundingClientRect(),d=Math.max(r.width,r.height),s=document.createElement("span");
+ s.className="rp";s.style.cssText=`width:${d}px;height:${d}px;left:${e.clientX-r.left-d/2}px;top:${e.clientY-r.top-d/2}px`;
+ b.appendChild(s);setTimeout(()=>s.remove(),650);
+ if(b.classList.contains("like")){b.classList.remove("pop");void b.offsetWidth;b.classList.add("pop")}});
 $("#burger").onclick=()=>$("#nav").classList.toggle("open");$("#nav").onclick=()=>$("#nav").classList.remove("open");
 </script></body></html>
